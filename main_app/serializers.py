@@ -2,7 +2,7 @@ from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
-from .models import UserProfile
+from .models import (UserProfile, Event, Attendee)
 
 # User profile serializer
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -29,12 +29,12 @@ class UserSerializer(serializers.ModelSerializer):
 # User signup serializer
 class UserSignupSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
-    password_confirma = serializers.CharField(write_only=True, required=True)
-    phone = serializers.CharField(max_length=15, required=False, allow_blank=True)
+    password_confirm = serializers.CharField(write_only=True, required=True)
+    phone = serializers.CharField(max_length=8, required=False, allow_blank=True)
 
     class Meta:
         model = User
-        fields = ['username', 'email', 'password', 'password_confirma', 'first_name', 'last_name', 'phone']
+        fields = ['username', 'email', 'password', 'password_confirm', 'first_name', 'last_name', 'phone']
         extra_kwargs = {
             'email': {'required': True},
             'username': {'required': True},
@@ -42,13 +42,14 @@ class UserSignupSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         password = attrs.get('password')
-        password_confirma = attrs.get('password_confirma')
+        password_confirm = attrs.get('password_confirm')
 
-        if password != password_confirma:
+        if password != password_confirm:
             raise serializers.ValidationError("Passwords do not match.")
         
         # Validate password
-        validate_password(password=password, user=User(**attrs))
+        user_data = {k: v for k, v in attrs.items() if k in ['username', 'email', 'first_name', 'last_name']}
+        validate_password(password=password, user=User(**user_data))
 
         return attrs
     
@@ -65,7 +66,7 @@ class UserSignupSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         # Get phone and remove password_confirm
         phone = validated_data.pop('phone', None)
-        validated_data.pop('password_confirma', None)
+        validated_data.pop('password_confirm', None)
 
         # Create user
         user = User.objects.create_user(**validated_data)
@@ -168,3 +169,75 @@ class UserUpdateSerializer(serializers.ModelSerializer):
                 UserProfile.objects.create(user=instance, phone=phone)
 
         return instance
+    
+# Event serializer
+class EventSerializer(serializers.ModelSerializer):
+    # Include the user who created the event
+    created_by = UserSerializer(read_only=True)
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True)
+
+    # Attendee count
+    attendee_count = serializers.SerializerMethodField()
+    confirmed_count = serializers.SerializerMethodField()
+    pending_count = serializers.SerializerMethodField()
+
+    # User-specific fields
+    is_attending = serializers.SerializerMethodField()
+    user_attendance_status = serializers.SerializerMethodField()
+    is_past = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Event
+        fields = ['id', 'title', 'description', 'date', 'time', 'location', 
+                  'created_by', 'created_by_username', 'attendee_count', 
+                  'confirmed_count', 'pending_count', 'is_attending', 
+                  'user_attendance_status', 'is_past']
+        read_only_fields = ['id', 'created_by']
+
+    def get_attendee_count(self, obj):
+        return obj.attendees.count()
+    
+    def get_confirmed_count(self, obj):
+        return obj.attendees.filter(confirmed=True).count()
+    
+    def get_pending_count(self, obj):
+        return obj.attendees.filter(confirmed=False).count()
+    
+    def get_user_attendance_status(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            user = request.user
+            try:
+                attendee = obj.attendees.get(user=user)
+                return 'confirmed' if attendee.confirmed else 'pending'
+            except Attendee.DoesNotExist:
+                return 'not_registered'
+        return 'not_authenticated'
+    
+    def get_is_attending(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            user = request.user
+            return obj.attendees.filter(user=user).exists()
+        return False
+    
+    def get_is_past(self, obj):
+        from django.utils import timezone
+        from datetime import datetime
+
+        event_datetime = datetime.combine(obj.date, obj.time)
+        current_datetime = timezone.now().replace(tzinfo=None)
+
+        return event_datetime < current_datetime
+    
+    def create(self, validated_data):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            validated_data['created_by'] = request.user
+        return super().create(validated_data)
+    
+    def update(self, instance, validated_data):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            validated_data['created_by'] = request.user
+        return super().update(instance, validated_data)

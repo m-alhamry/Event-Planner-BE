@@ -37,11 +37,13 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',  # <---- CORS headers package
     'main_app', # <---- your app name here
     'rest_framework' # <---- rest framework package
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',  # <---- CORS middleware (must be at the top)
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -133,6 +135,11 @@ REST_FRAMEWORK = {
     ),
 }
 
+# CORS settings
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",  # React development server
+    "http://127.0.0.1:5173",
+]
 
 from datetime import timedelta
 
