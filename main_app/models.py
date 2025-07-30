@@ -29,8 +29,8 @@ class Event(models.Model):
         ordering = ['-date', '-time']
 
 class Attendee(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='attendees')
-    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='attendances')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='attendances')
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='attendees')
     confirmed = models.BooleanField(default=False)    
     
     def __str__(self):
