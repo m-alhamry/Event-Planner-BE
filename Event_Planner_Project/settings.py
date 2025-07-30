@@ -76,8 +76,12 @@ WSGI_APPLICATION = 'Event_Planner_Project.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'event_planner',  # Name of your PostgreSQL database
+        'USER': 'postgres',
+        'PASSWORD': '1@Albahrain',
+        'HOST': 'localhost',  
+        'PORT': '5432',
     }
 }
 
