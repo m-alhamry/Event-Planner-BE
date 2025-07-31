@@ -4,6 +4,7 @@ from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 from .models import (UserProfile, Event, Attendee)
 
+# ================ USER AND AUTH SERIALIZERS ================
 # User profile serializer
 class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
@@ -169,7 +170,9 @@ class UserUpdateSerializer(serializers.ModelSerializer):
                 UserProfile.objects.create(user=instance, phone=phone)
 
         return instance
-    
+# ================ END OF USER AND AUTH SERIALIZERS ================
+
+# ================ EVENT AND ATTENDEE SERIALIZERS ================
 # Event serializer
 class EventSerializer(serializers.ModelSerializer):
     # Include the user who created the event
@@ -241,3 +244,38 @@ class EventSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             validated_data['created_by'] = request.user
         return super().update(instance, validated_data)
+# ================ END OF EVENT SERIALIZER ================ 
+
+# ================ ATTENDEE SERIALIZER ================    
+class AttendeeSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+    event = EventSerializer(read_only=True)
+
+    class Meta:
+        model = Attendee
+        fields = ['id', 'user', 'event', 'confirmed']
+        read_only_fields = ['id']
+    
+    def create(self, validated_data):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            validated_data['user'] = request.user
+        return super().create(validated_data)
+    
+    def validate(self, attrs):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            user = request.user
+            event = attrs.get('event')
+
+            if Attendee.objects.filter(user=user, event=event).exists():
+                raise serializers.ValidationError("You are already registered for this event.")
+        
+        return attrs
+    
+    def update(self, instance, validated_data):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            validated_data['user'] = request.user
+        return super().update(instance, validated_data)
+# ================ END OF ATTENDEE SERIALIZER ================
