@@ -9,7 +9,7 @@ from main_app.serializers import (
     UserUpdateSerializer, UserSigninSerializer, 
     EventSerializer, AttendeeSerializer
 )
-from datetime import datetime
+from datetime import datetime, timedelta
 from django.utils import timezone
 from django.db.models import Q
 
@@ -134,12 +134,12 @@ class EventListView(APIView):
                 # Validate and parse date string (e.g., "2025-08-03")
                 date_obj = datetime.strptime(date, '%Y-%m-%d').date()
                 # Convert to timezone-aware datetime range for Asia/Bahrain
-                start_datetime = timezone.make_aware(
-                    datetime.combine(date_obj, datetime.min.time()),
-                    timezone.get_default_timezone()
-                )
-                end_datetime = start_datetime + timezone.timedelta(days=1)
-                queryset = queryset.filter(date__gte=start_datetime, date__lt=end_datetime)
+                # start_datetime = timezone.make_aware(
+                #     datetime.combine(date_obj, datetime.min.time()),
+                #     timezone.get_default_timezone()
+                # )
+                # end_datetime = date_obj + timezone.timedelta(days=1)
+                queryset = queryset.filter(date__gte=date_obj, date__lt=date_obj+timedelta(days=1))
             except ValueError:
                 return Response({'error': 'Invalid date format. Use YYYY-MM-DD.'}, 
                                status=status.HTTP_400_BAD_REQUEST)
@@ -335,7 +335,7 @@ class UserStatsView(APIView):
         for attendee in attending_events.filter(confirmed=False):
             # Combine event.date and event.time
             event_datetime = datetime.combine(attendee.event.date.date(), attendee.event.time)
-            event_datetime = timezone.make_aware(event_datetime, timezone.get_default_timezone())
+            # event_datetime = timezone.make_aware(event_datetime, timezone.get_default_timezone())
             if event_datetime >= current_datetime:
                 pending_events_count += 1
         
@@ -343,7 +343,7 @@ class UserStatsView(APIView):
         upcoming_events_count = 0
         for attendee in attending_events:
             event_datetime = datetime.combine(attendee.event.date.date(), attendee.event.time)
-            event_datetime = timezone.make_aware(event_datetime, timezone.get_default_timezone())
+            # event_datetime = timezone.make_aware(event_datetime, timezone.get_default_timezone())
             if event_datetime >= current_datetime:
                 upcoming_events_count += 1
         
