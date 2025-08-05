@@ -15,7 +15,6 @@ from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
@@ -25,7 +24,7 @@ SECRET_KEY = 'django-insecure-rfbk56=$q@1cwxgl2cy!s^jjor+zcp5&w4yj(sh7847+==8abu
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
 
 # Application definition
@@ -39,8 +38,11 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'corsheaders',  # <---- CORS headers package
     'main_app', # <---- your app name here
-    'rest_framework' # <---- rest framework package
+    'rest_framework', # <---- rest framework package
+    'rest_framework_simplejwt.token_blacklist',
 ]
+
+AUTH_USER_MODEL = 'main_app.CustomUser'
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',  # <---- CORS middleware (must be at the top)
@@ -104,6 +106,12 @@ AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
+    
+    # Custom Validator that Validates that the password contains at least one lowercase letter,
+    # one uppercase letter, and one special character.
+    {
+        'NAME': 'main_app.validators.ComplexPasswordValidator',
+    },
 ]
 
 
@@ -112,7 +120,8 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+# TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Bahrain'  # Updated to Bahrain's timezone
 
 USE_I18N = True
 
@@ -145,6 +154,8 @@ from datetime import timedelta
 
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=7),  # make it long if you want only one token
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=0),  # disable refresh (optional)
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=7),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
 }

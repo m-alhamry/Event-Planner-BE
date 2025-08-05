@@ -1,9 +1,10 @@
-from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 from .models import (UserProfile, Event, Attendee)
+from django.contrib.auth import get_user_model
 
+User = get_user_model()
 # ================ USER AND AUTH SERIALIZERS ================
 # User profile serializer
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -31,7 +32,7 @@ class UserSerializer(serializers.ModelSerializer):
 class UserSignupSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     password_confirm = serializers.CharField(write_only=True, required=True)
-    phone = serializers.CharField(max_length=8, required=False, allow_blank=True)
+    phone = serializers.CharField(max_length=15, required=False, allow_blank=True)
 
     class Meta:
         model = User
@@ -144,15 +145,13 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['email', 'first_name', 'last_name', 'phone']
+        fields = ['first_name', 'last_name', 'phone']
         read_only_fields = ['id', 'date_joined']
     
     def update(self, instance, validated_data):
         phone = validated_data.pop('phone', None)
         
         # Update user fields
-        if 'email' in validated_data:
-            instance.email = validated_data['email']
         if 'first_name' in validated_data:
             instance.first_name = validated_data['first_name']
         if 'last_name' in validated_data:
@@ -173,6 +172,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 # ================ END OF USER AND AUTH SERIALIZERS ================
 
 # ================ EVENT AND ATTENDEE SERIALIZERS ================
+from django.utils import timezone
 # Event serializer
 class EventSerializer(serializers.ModelSerializer):
     # Include the user who created the event
@@ -187,14 +187,13 @@ class EventSerializer(serializers.ModelSerializer):
     # User-specific fields
     is_attending = serializers.SerializerMethodField()
     user_attendance_status = serializers.SerializerMethodField()
-    is_past = serializers.SerializerMethodField()
 
     class Meta:
         model = Event
         fields = ['id', 'title', 'description', 'date', 'time', 'location', 
                   'created_by', 'created_by_username', 'attendee_count', 
                   'confirmed_count', 'pending_count', 'is_attending', 
-                  'user_attendance_status', 'is_past']
+                  'user_attendance_status']
         read_only_fields = ['id', 'created_by']
 
     def get_attendee_count(self, obj):
@@ -215,7 +214,7 @@ class EventSerializer(serializers.ModelSerializer):
                 return 'confirmed' if attendee.confirmed else 'pending'
             except Attendee.DoesNotExist:
                 return 'not_registered'
-        return 'not_authenticated'
+        return 'not_registered'
     
     def get_is_attending(self, obj):
         request = self.context.get('request')
@@ -223,26 +222,23 @@ class EventSerializer(serializers.ModelSerializer):
             user = request.user
             return obj.attendees.filter(user=user).exists()
         return False
-    
-    def get_is_past(self, obj):
-        from django.utils import timezone
-        from datetime import datetime
 
-        event_datetime = datetime.combine(obj.date, obj.time)
-        current_datetime = timezone.now().replace(tzinfo=None)
-
-        return event_datetime < current_datetime
-    
     def create(self, validated_data):
+        # Ensure date is timezone-aware
+        date = validated_data.get('date')
+        if date and date.tzinfo is None:
+            validated_data['date'] = timezone.make_aware(date, timezone.get_default_timezone())
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             validated_data['created_by'] = request.user
         return super().create(validated_data)
     
     def update(self, instance, validated_data):
-        request = self.context.get('request')
-        if request and request.user.is_authenticated:
-            validated_data['created_by'] = request.user
+        # Ensure date is timezone-aware
+        date = validated_data.get('date')
+        if date and date.tzinfo is None:
+            validated_data['date'] = timezone.make_aware(date, timezone.get_default_timezone())
+        validated_data.pop('created_by', None)  # Prevent changing creator
         return super().update(instance, validated_data)
 # ================ END OF EVENT SERIALIZER ================ 
 
