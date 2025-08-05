@@ -51,7 +51,6 @@ class UserSignInView(APIView):
             refresh = RefreshToken.for_user(user)
             access_token = refresh.access_token
 
-
             return Response({
                 'message': 'User signed in successfully',
                 'user': UserSerializer(user).data,
@@ -84,10 +83,9 @@ class UserPasswordUpdateView(APIView):
         if serializer.is_valid():
             user = serializer.save()
 
-            # Create tokens
+            # Create new tokens
             refresh = RefreshToken.for_user(user)
             access_token = refresh.access_token
-
 
             return Response({
                 'message': 'Password updated successfully',
@@ -126,27 +124,17 @@ class EventListView(APIView):
                 Q(description__icontains=search) |
                 Q(location__icontains=search)
             )
-        
         # Date filter
         date = request.query_params.get('date', None)
         if date:
             try:
-                # Validate and parse date string (e.g., "2025-08-03")
+                # Validate and parse date string
                 date_obj = datetime.strptime(date, '%Y-%m-%d').date()
-                # Convert to timezone-aware datetime range for Asia/Bahrain
-                # start_datetime = timezone.make_aware(
-                #     datetime.combine(date_obj, datetime.min.time()),
-                #     timezone.get_default_timezone()
-                # )
-                # end_datetime = date_obj + timezone.timedelta(days=1)
                 queryset = queryset.filter(date__gte=date_obj, date__lt=date_obj+timedelta(days=1))
             except ValueError:
                 return Response({'error': 'Invalid date format. Use YYYY-MM-DD.'}, 
                                status=status.HTTP_400_BAD_REQUEST)
-        
-        # Sort events by date and time
-        queryset = queryset.order_by('date', 'time')
-        
+        queryset = queryset.order_by('-date')
         serializer = EventSerializer(queryset, many=True, context={'request': request, 'list_view': True})
         return Response(serializer.data, status=status.HTTP_200_OK)
     
@@ -187,11 +175,8 @@ class EventUpdateView(APIView):
             event = Event.objects.get(pk=id)
         except Event.DoesNotExist:
             return Response({'error': 'Event not found'}, status=status.HTTP_404_NOT_FOUND)
-        
-        # Check if user is the creator
         if event.created_by != request.user:
             return Response({'error': 'You do not have permission to update this event'}, status=status.HTTP_403_FORBIDDEN)
-
         serializer = EventSerializer(event, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():
             event = serializer.save()
@@ -235,7 +220,6 @@ class EventAttendeesView(APIView):
             event = Event.objects.get(pk=id)
         except Event.DoesNotExist:
             return Response({'error': 'Event not found'}, status=status.HTTP_404_NOT_FOUND)
-
         serializer = AttendeeSerializer(data=request.data)
         if serializer.is_valid():
             attendee = serializer.save(user=request.user, event=event)
@@ -250,7 +234,6 @@ class EventAttendView(APIView):
             event = Event.objects.get(pk=id)
         except Event.DoesNotExist:
             return Response({'error': 'Event not found'}, status=status.HTTP_404_NOT_FOUND)
-
         attendee, created = Attendee.objects.get_or_create(user=request.user, event=event)
         serializer = EventSerializer(event, context={'request': request})
         if created:
@@ -265,7 +248,6 @@ class EventConfirmAttendanceView(APIView):
             event = Event.objects.get(pk=id)
         except Event.DoesNotExist:
             return Response({'error': 'Event not found'}, status=status.HTTP_404_NOT_FOUND)
-
         try:
             attendee = Attendee.objects.get(user=request.user, event=event)
             attendee.confirmed = True
@@ -282,7 +264,6 @@ class EventDeclineAttendanceView(APIView):
             event = Event.objects.get(pk=id)
         except Event.DoesNotExist:
             return Response({'error': 'Event not found'}, status=status.HTTP_404_NOT_FOUND)
-
         try:
             attendee = Attendee.objects.get(user=request.user, event=event)
             attendee.confirmed = False
@@ -299,7 +280,6 @@ class EventCancelAttendanceView(APIView):
             event = Event.objects.get(pk=id)
         except Event.DoesNotExist:
             return Response({'error': 'Event not found'}, status=status.HTTP_404_NOT_FOUND)
-
         try:
             attendee = Attendee.objects.get(user=request.user, event=event)
             attendee.delete()
@@ -313,38 +293,20 @@ class EventCancelAttendanceView(APIView):
 class UserStatsView(APIView):
     permission_classes = [IsAuthenticated]
     
-    def get(self, request):
-        
+    def get(self, request):        
         user = request.user
-        
-        # Count created events
-        created_events_count = Event.objects.filter(created_by=user).count()
-        
-        # Count attending events
+        created_events_count = Event.objects.filter(created_by=user).count() # Count created events
         attending_events = Attendee.objects.filter(user=user)
-        attending_events_count = attending_events.count()
-        
-        # Count confirmed events
-        confirmed_events_count = attending_events.filter(confirmed=True).count()
-        
-        # Current datetime in Asia/Bahrain
+        attending_events_count = attending_events.count() # Count attending events
+        confirmed_events_count = attending_events.filter(confirmed=True).count() # Count confirmed events
         current_datetime = timezone.now()
-        
-        # Count pending events (not confirmed and not past)
-        pending_events_count = 0
+        pending_events_count = 0  # Count pending events (not confirmed and not past)
         for attendee in attending_events.filter(confirmed=False):
-            # Combine event.date and event.time
-            event_datetime = datetime.combine(attendee.event.date.date(), attendee.event.time)
-            # event_datetime = timezone.make_aware(event_datetime, timezone.get_default_timezone())
-            if event_datetime >= current_datetime:
+            if attendee.event.date >= current_datetime:
                 pending_events_count += 1
-        
-        # Get upcoming events (attending events not past)
-        upcoming_events_count = 0
+        upcoming_events_count = 0 # Count upcoming events (attending events not past)
         for attendee in attending_events:
-            event_datetime = datetime.combine(attendee.event.date.date(), attendee.event.time)
-            # event_datetime = timezone.make_aware(event_datetime, timezone.get_default_timezone())
-            if event_datetime >= current_datetime:
+            if attendee.event.date >= current_datetime:
                 upcoming_events_count += 1
         
         return Response({

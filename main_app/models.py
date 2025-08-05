@@ -25,16 +25,15 @@ class Event(models.Model):
     title = models.CharField(max_length=200)
     description = models.TextField()
     date = models.DateTimeField()
-    time = models.TimeField()
     location = models.CharField(max_length=255)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_events')
     
     def __str__(self):
-        return f"Event: {self.title} - Created by {self.created_by.username} on {self.date.strftime('%Y-%m-%d')} at {self.time.strftime('%H:%M')}"
+        return f"Event: {self.title} - Created by {self.created_by.username} on {self.date.strftime('%Y-%m-%d')} at {self.date.strftime('%H:%M')}"
     
     class Meta:
         db_table = 'event'
-        ordering = ['-date', '-time']
+        ordering = ['-date']
 
 class Attendee(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='attendances')
@@ -42,7 +41,7 @@ class Attendee(models.Model):
     confirmed = models.BooleanField(default=False)    
     
     def __str__(self):
-        return f"{self.user.username} - {self.event.title}"
+        return f"user: {self.user.username} attending event: {self.event.title}"
     
     class Meta:
         db_table = 'attendee'

@@ -1,10 +1,14 @@
+from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 from .models import (UserProfile, Event, Attendee)
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 
+# Set User to CustomUser
 User = get_user_model()
+
 # ================ USER AND AUTH SERIALIZERS ================
 # User profile serializer
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -45,14 +49,11 @@ class UserSignupSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         password = attrs.get('password')
         password_confirm = attrs.get('password_confirm')
-
         if password != password_confirm:
             raise serializers.ValidationError("Passwords do not match.")
-        
         # Validate password
-        user_data = {k: v for k, v in attrs.items() if k in ['username', 'email', 'first_name', 'last_name']}
+        user_data = {k: v for k, v in attrs.items() if k in ['username', 'email', 'first_name', 'last_name', 'phone']}
         validate_password(password=password, user=User(**user_data))
-
         return attrs
     
     def validate_email(self, value):
@@ -69,13 +70,10 @@ class UserSignupSerializer(serializers.ModelSerializer):
         # Get phone and remove password_confirm
         phone = validated_data.pop('phone', None)
         validated_data.pop('password_confirm', None)
-
         # Create user
         user = User.objects.create_user(**validated_data)
-
         # Create user profile
         UserProfile.objects.create(user=user, phone=phone)
-
         return user
     
 # User signin serializer
@@ -86,10 +84,8 @@ class UserSigninSerializer(serializers.Serializer):
     def validate(self, attrs):
         username_or_email = attrs.get('username_or_email')
         password = attrs.get('password')
-
         if not username_or_email or not password:
             raise serializers.ValidationError("Both username/email and password are required.")
-        
         # Check if username_or_email is an email or username
         if '@' in username_or_email:
             user = None
@@ -100,12 +96,13 @@ class UserSigninSerializer(serializers.Serializer):
                 raise serializers.ValidationError("Invalid email or password.")
         else:
             user = authenticate(username=username_or_email, password=password)
-
+        # Check username incase it has the character '@'
         if user is None:
-            raise serializers.ValidationError("Invalid username or password.")
-        
+            try:
+                user = authenticate(username=username_or_email, password=password)
+            except User.DoesNotExist:
+                raise serializers.ValidationError("Invalid username or password.")
         attrs['user'] = user
-
         return attrs
     
 # User password update serializer
@@ -123,13 +120,10 @@ class UserPasswordUpdateSerializer(serializers.Serializer):
     def validate(self, attrs):
         new_password = attrs.get('new_password')
         new_password_confirm = attrs.get('new_password_confirm')
-
         if new_password != new_password_confirm:
             raise serializers.ValidationError("New passwords do not match.")
-        
         # Validate new password
         validate_password(password=new_password, user=self.context['request'].user)
-
         return attrs
     
     def save(self):
@@ -150,16 +144,11 @@ class UserUpdateSerializer(serializers.ModelSerializer):
     
     def update(self, instance, validated_data):
         phone = validated_data.pop('phone', None)
-        
-        # Update user fields
         if 'first_name' in validated_data:
             instance.first_name = validated_data['first_name']
         if 'last_name' in validated_data:
             instance.last_name = validated_data['last_name']
-        
         instance.save()
-
-        # Update user profile
         if phone is not None:
             try:
                 profile = instance.profile
@@ -167,34 +156,75 @@ class UserUpdateSerializer(serializers.ModelSerializer):
                 profile.save()
             except UserProfile.DoesNotExist:
                 UserProfile.objects.create(user=instance, phone=phone)
-
         return instance
 # ================ END OF USER AND AUTH SERIALIZERS ================
 
-# ================ EVENT AND ATTENDEE SERIALIZERS ================
-from django.utils import timezone
-# Event serializer
+# ================ EVENT SERIALIZERS ================
 class EventSerializer(serializers.ModelSerializer):
-    # Include the user who created the event
-    created_by = UserSerializer(read_only=True)
-    created_by_username = serializers.CharField(source='created_by.username', read_only=True)
-
-    # Attendee count
-    attendee_count = serializers.SerializerMethodField()
-    confirmed_count = serializers.SerializerMethodField()
-    pending_count = serializers.SerializerMethodField()
-
-    # User-specific fields
-    is_attending = serializers.SerializerMethodField()
-    user_attendance_status = serializers.SerializerMethodField()
+    created_by = UserSerializer(read_only=True) # User object
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True) # Username string
+    attendee_count = serializers.SerializerMethodField() # Count registered users
+    confirmed_count = serializers.SerializerMethodField() # Count registered users (confirmed = true)
+    pending_count = serializers.SerializerMethodField() # Count registered users (confirmed = false)
+    user_attendance_status = serializers.SerializerMethodField() # User-specific status (pending, confirmed, or not_registered )
+    date = serializers.DateField(write_only=True, required=False)
+    time = serializers.TimeField(write_only=True, required=False)
 
     class Meta:
         model = Event
         fields = ['id', 'title', 'description', 'date', 'time', 'location', 
                   'created_by', 'created_by_username', 'attendee_count', 
-                  'confirmed_count', 'pending_count', 'is_attending', 
-                  'user_attendance_status']
+                  'confirmed_count', 'pending_count', 'user_attendance_status']
         read_only_fields = ['id', 'created_by']
+
+    def validate(self, attrs):
+        if self.instance is None:
+            if 'date' not in attrs or 'time' not in attrs:
+                raise serializers.ValidationError('Both date and time are required for creation.')
+        return attrs
+
+    def create(self, validated_data):
+        # Handle date and time combination
+        date = validated_data.pop('date')
+        time = validated_data.pop('time')
+        datetime_obj = timezone.datetime.combine(date, time)
+        # Timezone aware if USE_TZ set to true in settings
+        if settings.USE_TZ:
+            datetime_obj = timezone.make_aware(datetime_obj, timezone.get_default_timezone())
+        validated_data['date'] = datetime_obj # Set date-time combination to date field in Event model
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            validated_data['created_by'] = request.user # Set created_by to the current authenticated user
+        else:
+            raise serializers.ValidationError("User must be authenticated to create an event.")
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        date = validated_data.pop('date', None)
+        time = validated_data.pop('time', None)
+        if date and time:
+            datetime_obj = timezone.datetime.combine(date, time)
+        elif date:
+            existing_time = instance.date.time()
+            datetime_obj = timezone.datetime.combine(date, existing_time)
+        elif time:
+            existing_date = instance.date.date()
+            datetime_obj = timezone.datetime.combine(existing_date, time)
+        else:
+            datetime_obj = instance.date
+        if settings.USE_TZ and datetime_obj.tzinfo is None:
+            datetime_obj = timezone.make_aware(datetime_obj, timezone.get_default_timezone())
+        instance.date = datetime_obj
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        representation['date'] = instance.date.date()
+        representation['time'] = instance.date.time()
+        return representation
 
     def get_attendee_count(self, obj):
         return obj.attendees.count()
@@ -215,31 +245,6 @@ class EventSerializer(serializers.ModelSerializer):
             except Attendee.DoesNotExist:
                 return 'not_registered'
         return 'not_registered'
-    
-    def get_is_attending(self, obj):
-        request = self.context.get('request')
-        if request and request.user.is_authenticated:
-            user = request.user
-            return obj.attendees.filter(user=user).exists()
-        return False
-
-    def create(self, validated_data):
-        # Ensure date is timezone-aware
-        date = validated_data.get('date')
-        if date and date.tzinfo is None:
-            validated_data['date'] = timezone.make_aware(date, timezone.get_default_timezone())
-        request = self.context.get('request')
-        if request and request.user.is_authenticated:
-            validated_data['created_by'] = request.user
-        return super().create(validated_data)
-    
-    def update(self, instance, validated_data):
-        # Ensure date is timezone-aware
-        date = validated_data.get('date')
-        if date and date.tzinfo is None:
-            validated_data['date'] = timezone.make_aware(date, timezone.get_default_timezone())
-        validated_data.pop('created_by', None)  # Prevent changing creator
-        return super().update(instance, validated_data)
 # ================ END OF EVENT SERIALIZER ================ 
 
 # ================ ATTENDEE SERIALIZER ================    
@@ -263,10 +268,8 @@ class AttendeeSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             user = request.user
             event = attrs.get('event')
-
             if Attendee.objects.filter(user=user, event=event).exists():
                 raise serializers.ValidationError("You are already registered for this event.")
-        
         return attrs
     
     def update(self, instance, validated_data):
