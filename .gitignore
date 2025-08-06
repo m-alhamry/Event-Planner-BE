@@ -1,0 +1,23 @@
+# Environment variables
+.env
+
+# Django database file
+db.sqlite3
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.eggs/
+.egg-info/
+Pipfile.lock
+
+# Django
+*.log
+local_settings.py
