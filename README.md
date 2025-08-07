@@ -6,6 +6,13 @@ This is the backend API for the Event Planner application, built with Django RES
 
 **🔗 Frontend Repository**: [Event Planner Frontend](https://github.com/m-alhamry/Event-Planner-FE)
 
+## 🌐 Live Demo
+- **Frontend**: [event-planner-fe.onrender.com](https://event-planner-fe.onrender.com) - Access the user interface to sign up, create events, and manage your profile.
+- **Backend API**: [event-planner-be-8po3.onrender.com](https://event-planner-be-8po3.onrender.com) - The backend API (see backend repository for details).
+
+> **Note**: Hosted on Render's free tier, so it may take a moment to wake up.
+
+
 ## 🗄️ Database Schema & ERD
 
 ### Entity Relationship Diagram
