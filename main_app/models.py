@@ -20,7 +20,7 @@ class Event(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_events')
     
     def __str__(self):
-        return f"Event: {self.title} - Created by {self.created_by.username} on {self.date.strftime('%Y-%m-%d')} at {self.date.strftime('%H:%M')}"
+        return f"Event: {self.title} - Created by {self.created_by.username}. This Event will be on {self.date.strftime('%Y-%m-%d')} at {self.date.strftime('%H:%M')}"
     
     class Meta:
         db_table = 'event'
