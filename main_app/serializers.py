@@ -52,7 +52,7 @@ class UserSignupSerializer(serializers.ModelSerializer):
         if password != password_confirm:
             raise serializers.ValidationError("Passwords do not match.")
         # Validate password
-        user_data = {k: v for k, v in attrs.items() if k in ['username', 'email', 'first_name', 'last_name', 'phone']}
+        user_data = {k: v for k, v in attrs.items() if k in ['username', 'email', 'first_name', 'last_name']}
         validate_password(password=password, user=User(**user_data))
         return attrs
     
