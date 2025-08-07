@@ -10,6 +10,7 @@ urlpatterns = [
     path('auth/profile/', views.UserProfileView.as_view(), name='user-profile'),
     path('auth/password-update/', views.UserPasswordUpdateView.as_view(), name='user-password-update'),
     path('auth/logout/', views.UserLogoutView.as_view(), name='user-logout'),
+    path('auth/delete-account/', views.UserDeleteAccountView.as_view(), name='user-delete-account'),
 
     # ================ EVENT ROUTES ================
     path('events/', views.EventListView.as_view(), name='event-list'),
@@ -32,5 +33,5 @@ urlpatterns = [
 
     # ================ JWT AUTH ROUTES ================
     path('auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('auth/token/refresh/', views.CustomTokenRefreshView.as_view(), name='token_refresh'),
 ]

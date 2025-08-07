@@ -12,6 +12,10 @@ from main_app.serializers import (
 from datetime import datetime, timedelta
 from django.utils import timezone
 from django.db.models import Q
+from django.contrib.auth import get_user_model
+
+
+User = get_user_model()
 
 # Create your views here.
 
@@ -101,11 +105,53 @@ class UserLogoutView(APIView):
     def post(self, request):
         try:
             refresh_token = request.data.get('refresh_token')
+            if not refresh_token:
+                return Response(
+                    {"detail": "Refresh token is required."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             token = RefreshToken(refresh_token)
-            token.blacklist()  # Blacklist the refresh token
-            return Response({'message': 'User logged out successfully'}, status=status.HTTP_205_RESET_CONTENT)
+            token.blacklist()
+            return Response(
+                {"detail": "Successfully logged out."},
+                status=status.HTTP_205_RESET_CONTENT
+            )
         except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)    
+            return Response(
+                {"detail": f"Error during logout: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+class UserDeleteAccountView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):
+        user = request.user
+        try:
+            # Get the refresh token from the request body
+            refresh_token = request.data.get('refresh_token')
+            if not refresh_token:
+                return Response(
+                    {"detail": "Refresh token is required."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Blacklist the refresh token
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+
+            # Delete the user
+            user.delete()
+
+            return Response(
+                {"detail": "Account and associated tokens deleted successfully."},
+                status=status.HTTP_204_NO_CONTENT
+            )
+        except Exception as e:
+            return Response(
+                {"detail": f"Error deleting account: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 # ==================== END OF AUTHENTICATION AND USER VIEWS ====================
 
 # ===================== EVENT VIEWS ====================
@@ -317,3 +363,17 @@ class UserStatsView(APIView):
             'upcoming_events': upcoming_events_count,
         })
 # ===================== END OF USER STATS VIEWS ====================
+
+# ===================== TOKEN VIEWS ====================
+from rest_framework_simplejwt.views import TokenRefreshView
+class CustomTokenRefreshView(TokenRefreshView):
+    def post(self, request, *args, **kwargs):
+        try:
+            return super().post(request, *args, **kwargs)
+        except User.DoesNotExist:
+            # If the user doesn't exist, return an error and let the frontend handle it
+            return Response(
+                {"detail": "User associated with this token no longer exists."},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+# ===================== END OF TOKEN STATS VIEWS ====================

@@ -90,9 +90,26 @@ WSGI_APPLICATION = 'Event_Planner_Project.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 
+# Get the DB_HOST environment variable
+DB_HOST = os.getenv('DB_HOST')
+
+# Check if DB_HOST is a full URL (contains a scheme like 'postgresql://')
+if DB_HOST and '://' in DB_HOST:
+    # Use it directly if it's a full URL
+    DATABASE_URL = DB_HOST
+else:
+    # Construct the URL from individual components
+    DB_USER = os.getenv('DB_USER', 'postgres')
+    DB_PASSWORD = os.getenv('DB_PASSWORD', '1@Albahrain') # URL-encode the password
+    DB_HOST = os.getenv('DB_HOST', 'localhost')
+    DB_PORT = os.getenv('DB_PORT', '5432')
+    DB_NAME = os.getenv('DB_NAME', 'event_planner')
+    DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+
+# Configure the database
 DATABASES = {
     'default': dj_database_url.config(
-        default=os.getenv('DB_HOST'),
+        default=DATABASE_URL,
         conn_max_age=600,
         conn_health_checks=True
     )

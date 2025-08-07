@@ -2,7 +2,7 @@ from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
-from .models import (UserProfile, Event, Attendee)
+from .models import (Event, Attendee)
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
@@ -10,27 +10,14 @@ from django.utils import timezone
 User = get_user_model()
 
 # ================ USER AND AUTH SERIALIZERS ================
-# User profile serializer
-class UserProfileSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = UserProfile
-        fields = ['phone']
 
 # User serializer for displaying user information
 class UserSerializer(serializers.ModelSerializer):
-    phone = serializers.SerializerMethodField()
     
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 'phone', 'date_joined']
         read_only_fields = ['id', 'date_joined']
-    
-    def get_phone(self, obj):
-        # get phone from profile
-        try:
-            return obj.profile.phone
-        except UserProfile.DoesNotExist:
-            return None
         
 # User signup serializer
 class UserSignupSerializer(serializers.ModelSerializer):
@@ -67,13 +54,10 @@ class UserSignupSerializer(serializers.ModelSerializer):
         return value
     
     def create(self, validated_data):
-        # Get phone and remove password_confirm
-        phone = validated_data.pop('phone', None)
+        # Remove password_confirm
         validated_data.pop('password_confirm', None)
         # Create user
         user = User.objects.create_user(**validated_data)
-        # Create user profile
-        UserProfile.objects.create(user=user, phone=phone)
         return user
     
 # User signin serializer
@@ -143,19 +127,12 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'date_joined']
     
     def update(self, instance, validated_data):
-        phone = validated_data.pop('phone', None)
         if 'first_name' in validated_data:
             instance.first_name = validated_data['first_name']
         if 'last_name' in validated_data:
             instance.last_name = validated_data['last_name']
-        instance.save()
-        if phone is not None:
-            try:
-                profile = instance.profile
-                profile.phone = phone
-                profile.save()
-            except UserProfile.DoesNotExist:
-                UserProfile.objects.create(user=instance, phone=phone)
+        if 'phone' in validated_data:
+            instance.phone = validated_data['phone']
         return instance
 # ================ END OF USER AND AUTH SERIALIZERS ================
 
