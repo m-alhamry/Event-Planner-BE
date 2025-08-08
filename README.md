@@ -53,7 +53,7 @@ erDiagram
 
 ### 📊 Database Tables
 
-#### 1. **User** (`auth_user`)
+#### 1. **User** (`user`)
 | Column | Type | Description |
 |--------|------|-------------|
 | `id` | Integer | Primary Key |
