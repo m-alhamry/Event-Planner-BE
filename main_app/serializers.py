@@ -12,8 +12,8 @@ User = get_user_model()
 # ================ USER AND AUTH SERIALIZERS ================
 
 # User serializer for displaying user information
-class UserSerializer(serializers.ModelSerializer):
-    
+class UserSerializer(serializers.ModelSerializer): 
+
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 'phone', 'date_joined']
@@ -29,37 +29,39 @@ class UserSignupSerializer(serializers.ModelSerializer):
         model = User
         fields = ['username', 'email', 'password', 'password_confirm', 'first_name', 'last_name', 'phone']
         extra_kwargs = {
-            'email': {'required': True},
-            'username': {'required': True},
+            'email': {'required': True, 'validators': []},
+            'username': {'required': True, 'validators': []},
         }
 
     def validate(self, attrs):
+        errors = {}
+        # Normalize and check username
+        username = attrs.get('username')
+        if username:
+            attrs['username'] = username.lower()
+            if User.objects.filter(username__iexact=attrs['username']).exists():
+                errors['username'] = "Username is already in use."
+        # Normalize and check email
+        email = attrs.get('email')
+        if email:
+            attrs['email'] = email.lower()
+            if User.objects.filter(email__iexact=attrs['email']).exists():
+                errors['email'] = "Email is already in use."
+        # Check passwords
         password = attrs.get('password')
         password_confirm = attrs.get('password_confirm')
         if password != password_confirm:
-            raise serializers.ValidationError("Passwords do not match.")
-        # Validate password
-        user_data = {k: v for k, v in attrs.items() if k in ['username', 'email', 'first_name', 'last_name']}
-        validate_password(password=password, user=User(**user_data))
+            errors['password'] = "Passwords do not match."
+        if errors:
+            raise serializers.ValidationError(errors)
         return attrs
-    
-    def validate_email(self, value):
-        if User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("Email is already in use.")
-        return value
-    
-    def validate_username(self, value):
-        if User.objects.filter(username=value).exists():
-            raise serializers.ValidationError("Username is already in use.")
-        return value
     
     def create(self, validated_data):
         # Remove password_confirm
         validated_data.pop('password_confirm', None)
-        # Create user
         user = User.objects.create_user(**validated_data)
         return user
-    
+        
 # User signin serializer
 class UserSigninSerializer(serializers.Serializer):
     username_or_email = serializers.CharField(required=True)
@@ -69,23 +71,21 @@ class UserSigninSerializer(serializers.Serializer):
         username_or_email = attrs.get('username_or_email')
         password = attrs.get('password')
         if not username_or_email or not password:
-            raise serializers.ValidationError("Both username/email and password are required.")
-        # Check if username_or_email is an email or username
-        if '@' in username_or_email:
-            user = None
+            raise serializers.ValidationError("Both username/email and password are required.", code='authorization')
+        # First, try to authenticate with the given credential as a username.
+        # This handles standard username login and cases where the username is an email.
+        user = authenticate(username=username_or_email, password=password)
+        # If authentication fails, and the input looks like an email, try to find
+        # the user by email and authenticate with their actual username.
+        if user is None and '@' in username_or_email:
             try:
-                user_obj = User.objects.get(email=username_or_email)
+                user_obj = User.objects.get(email__iexact=username_or_email)
                 user = authenticate(username=user_obj.username, password=password)
             except User.DoesNotExist:
-                raise serializers.ValidationError("Invalid email or password.")
-        else:
-            user = authenticate(username=username_or_email, password=password)
-        # Check username incase it has the character '@'
-        if user is None:
-            try:
-                user = authenticate(username=username_or_email, password=password)
-            except User.DoesNotExist:
-                raise serializers.ValidationError("Invalid username or password.")
+                # This pass is fine because we'll fail the final check regardless.
+                pass
+        if not user:
+            raise serializers.ValidationError("Invalid email or password.", code='authorization')
         attrs['user'] = user
         return attrs
     
@@ -157,8 +157,8 @@ class EventSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         if self.instance is None:
-            if 'date' not in attrs or 'time' not in attrs:
-                raise serializers.ValidationError('Both date and time are required for creation.')
+            if 'title' not in attrs or 'date' not in attrs or 'time' not in attrs or 'location' not in attrs:
+                raise serializers.ValidationError('Title, date, time, and location are required for creation.')
         return attrs
 
     def create(self, validated_data):

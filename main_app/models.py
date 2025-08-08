@@ -13,11 +13,11 @@ class CustomUser(AbstractUser):
         db_table = 'user'
 
 class Event(models.Model):
-    title = models.CharField(max_length=200)
-    description = models.TextField()
-    date = models.DateTimeField()
-    location = models.CharField(max_length=255)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_events')
+    title = models.CharField(max_length=200, blank=False)
+    description = models.TextField(blank=True, null=True)
+    date = models.DateTimeField(blank=False)
+    location = models.CharField(max_length=255, blank=False)
+    created_by = models.ForeignKey(User, blank=False, on_delete=models.CASCADE, related_name='created_events')
     
     def __str__(self):
         return f"Event: {self.title} - Created by {self.created_by.username}. This Event will be on {self.date.strftime('%Y-%m-%d')} at {self.date.strftime('%H:%M')}"

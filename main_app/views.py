@@ -12,10 +12,10 @@ from main_app.serializers import (
 from datetime import datetime, timedelta
 from django.utils import timezone
 from django.db.models import Q
-from django.contrib.auth import get_user_model
+from django.conf import settings
 
 
-User = get_user_model()
+User = settings.AUTH_USER_MODEL
 
 # Create your views here.
 
@@ -28,11 +28,9 @@ class UserSignUpView(APIView):
             serializer = UserSignupSerializer(data=request.data)
             if serializer.is_valid():
                 user = serializer.save()
-
                 # Create tokens
                 refresh = RefreshToken.for_user(user)
                 access_token = refresh.access_token
-
                 return Response(
                     {
                         'message': 'User created successfully',
@@ -44,9 +42,13 @@ class UserSignUpView(APIView):
                 )
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    'error': 'An unexpected error occurred during sign-up'
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-    
 class UserSignInView(APIView):
     permission_classes = [AllowAny]
 
@@ -55,20 +57,36 @@ class UserSignInView(APIView):
             serializer = UserSigninSerializer(data=request.data)
             if serializer.is_valid():
                 user = serializer.validated_data['user']
-
                 # Create tokens
                 refresh = RefreshToken.for_user(user)
                 access_token = refresh.access_token
-
                 return Response({
                     'message': 'User signed in successfully',
                     'user': UserSerializer(user).data,
                     'refresh_token': str(refresh),
                     'access_token': str(access_token)
                 }, status=status.HTTP_200_OK)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            # If serializer is not valid, reformat the error for the frontend
+            errors = serializer.errors
+            error_message = "Login failed. Please check your credentials." # Default message        
+            if errors:
+                # Get the first key (field name) and its list of errors
+                try:
+                    first_key = next(iter(errors))
+                    error_list = errors[first_key]
+                    if error_list:
+                        error_message = error_list[0]
+                except (StopIteration, IndexError):
+                    # This will prevent crashes if the errors dict is empty or malformed
+                    pass
+            return Response({'error': error_message}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    'error': 'An unexpected error occurred during sign-in'
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
@@ -79,35 +97,53 @@ class UserProfileView(APIView):
             serializer = UserSerializer(user)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as e:
-            Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    'error': 'An unexpected error occurred during user profile loading'
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     def put(self, request):
-        user = request.user
-        serializer = UserUpdateSerializer(user, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.update(user, request.data)
+        try:
+            user = request.user
+            serializer = UserUpdateSerializer(user, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.update(user, request.data)
+                return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
             return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(
+                {
+                    'error': 'An unexpected error occurred during user profile update'
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
 class UserPasswordUpdateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def put(self, request):
-        serializer = UserPasswordUpdateSerializer(data=request.data, context={'request': request})
-        if serializer.is_valid():
-            user = serializer.save()
-
-            # Create new tokens
-            refresh = RefreshToken.for_user(user)
-            access_token = refresh.access_token
-
-            return Response({
-                'message': 'Password updated successfully',
-                'refresh_token': str(refresh),
-                'access_token': str(access_token)
-            }, status=status.HTTP_200_OK)
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            serializer = UserPasswordUpdateSerializer(data=request.data, context={'request': request})
+            if serializer.is_valid():
+                user = serializer.save()
+                # Create new tokens
+                refresh = RefreshToken.for_user(user)
+                access_token = refresh.access_token
+                return Response({
+                    'message': 'Password updated successfully',
+                    'refresh_token': str(refresh),
+                    'access_token': str(access_token)
+                }, status=status.HTTP_200_OK)
+            return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
+        except Exception as e:  
+            return Response(
+                {
+                    'error': 'An unexpected error occurred during user password update'
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
 class UserLogoutView(APIView):
     permission_classes = [IsAuthenticated]
@@ -117,18 +153,18 @@ class UserLogoutView(APIView):
             refresh_token = request.data.get('refresh_token')
             if not refresh_token:
                 return Response(
-                    {"detail": "Refresh token is required."},
+                    {"error": "Refresh token is required."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             token = RefreshToken(refresh_token)
             token.blacklist()
             return Response(
-                {"detail": "Successfully logged out."},
+                {"error": "Successfully logged out."},
                 status=status.HTTP_205_RESET_CONTENT
             )
         except Exception as e:
             return Response(
-                {"detail": f"Error during logout: {str(e)}"},
+                {"error": f"Error during logout: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -142,24 +178,21 @@ class UserDeleteAccountView(APIView):
             refresh_token = request.data.get('refresh_token')
             if not refresh_token:
                 return Response(
-                    {"detail": "Refresh token is required."},
+                    {"error": "Refresh token is required."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-
             # Blacklist the refresh token
             token = RefreshToken(refresh_token)
             token.blacklist()
-
             # Delete the user
             user.delete()
-
             return Response(
-                {"detail": "Account and associated tokens deleted successfully."},
+                {"error": "Account and associated tokens deleted successfully."},
                 status=status.HTTP_204_NO_CONTENT
             )
         except Exception as e:
             return Response(
-                {"detail": f"Error deleting account: {str(e)}"},
+                {"error": f"Error deleting account: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 # ==================== END OF AUTHENTICATION AND USER VIEWS ====================
