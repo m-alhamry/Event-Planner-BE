@@ -24,52 +24,62 @@ class UserSignUpView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        serializer = UserSignupSerializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.save()
+        try:
+            serializer = UserSignupSerializer(data=request.data)
+            if serializer.is_valid():
+                user = serializer.save()
 
-            # Create tokens
-            refresh = RefreshToken.for_user(user)
-            access_token = refresh.access_token
+                # Create tokens
+                refresh = RefreshToken.for_user(user)
+                access_token = refresh.access_token
 
-            return Response(
-                {
-                    'message': 'User created successfully',
-                    'user': UserSerializer(user).data,
-                    'refresh_token': str(refresh),
-                    'access_token': str(access_token)
-                }, 
-                status=status.HTTP_201_CREATED
-            )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {
+                        'message': 'User created successfully',
+                        'user': UserSerializer(user).data,
+                        'refresh_token': str(refresh),
+                        'access_token': str(access_token)
+                    }, 
+                    status=status.HTTP_201_CREATED
+                )
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
     
 class UserSignInView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        serializer = UserSigninSerializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.validated_data['user']
+        try:
+            serializer = UserSigninSerializer(data=request.data)
+            if serializer.is_valid():
+                user = serializer.validated_data['user']
 
-            # Create tokens
-            refresh = RefreshToken.for_user(user)
-            access_token = refresh.access_token
+                # Create tokens
+                refresh = RefreshToken.for_user(user)
+                access_token = refresh.access_token
 
-            return Response({
-                'message': 'User signed in successfully',
-                'user': UserSerializer(user).data,
-                'refresh_token': str(refresh),
-                'access_token': str(access_token)
-            }, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                return Response({
+                    'message': 'User signed in successfully',
+                    'user': UserSerializer(user).data,
+                    'refresh_token': str(refresh),
+                    'access_token': str(access_token)
+                }, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user = request.user
-        serializer = UserSerializer(user)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        try:
+            user = request.user
+            serializer = UserSerializer(user)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def put(self, request):
         user = request.user

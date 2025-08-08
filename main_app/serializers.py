@@ -133,6 +133,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
             instance.last_name = validated_data['last_name']
         if 'phone' in validated_data:
             instance.phone = validated_data['phone']
+        instance.save()
         return instance
 # ================ END OF USER AND AUTH SERIALIZERS ================
 
