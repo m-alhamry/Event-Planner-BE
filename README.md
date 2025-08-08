@@ -18,7 +18,6 @@ This is the backend API for the Event Planner application, built with Django RES
 
 ```mermaid
 erDiagram
-    User ||--o{ UserProfile : has
     User ||--o{ Event : creates
     User ||--o{ Attendee : registers
     Event ||--o{ Attendee : has
@@ -32,11 +31,6 @@ erDiagram
         string last_name
         datetime date_joined
         boolean is_active
-    }
-    
-    UserProfile {
-        int id PK
-        int user_id FK
         string phone
     }
     
@@ -70,12 +64,6 @@ erDiagram
 | `last_name` | String | User's last name |
 | `date_joined` | DateTime | Account creation timestamp |
 | `is_active` | Boolean | Account active status |
-
-#### 2. **UserProfile** (`user_profile`)
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | Integer | Primary Key |
-| `user_id` | Integer | Foreign Key to User |
 | `phone` | String | Optional phone number |
 
 #### 3. **Event** (`event`)
@@ -98,7 +86,6 @@ erDiagram
 
 ### 🔗 Relationships
 
-- **One-to-One**: `User` ↔ `UserProfile`
 - **One-to-Many**: `User` → `Event` (created_events)
 - **One-to-Many**: `User` → `Attendee` (registrations)
 - **One-to-Many**: `Event` → `Attendee` (attendees)
@@ -111,6 +98,14 @@ erDiagram
 - **Cascading Deletes**: When a user is deleted, their profile and created events are also deleted
 - **Foreign Key Constraints**: All relationships maintain referential integrity
 
+### 🔗 Relationships Summary
+
+- **Users** can create multiple **Events**
+- **Users** can register for multiple **Events** through **Attendee**
+- **Events** can have multiple **Attendees**
+
+This creates a clean, normalized database structure that supports all the required functionality while maintaining referential integrity and performance.
+
 ## 🚀 Quick Start
 
 1. **Clone the repository**
@@ -122,6 +117,7 @@ erDiagram
 2. **Install dependencies**
    ```bash
    pip install pipenv
+   pipenv shell
    pipenv install
    ```
 
@@ -193,29 +189,3 @@ erDiagram
 - **JWT Tokens**: Secure authentication tokens
 - **CORS Configuration**: Cross-origin request handling
 - **Input Validation**: Comprehensive data validation
-
-## 📊 Database Configuration
-
-### Migration Commands
-```bash
-# Create migrations
-python manage.py makemigrations
-
-# Apply migrations
-python manage.py migrate
-
-# Create superuser
-python manage.py createsuperuser
-
-# Run development server
-python manage.py runserver
-```
-
-## 🔗 Relationships Summary
-
-- **Users** can create multiple **Events**
-- **Users** can register for multiple **Events** through **Attendee**
-- **Events** can have multiple **Attendees**
-- **Users** have optional **UserProfile** for additional information
-
-This creates a clean, normalized database structure that supports all the required functionality while maintaining referential integrity and performance.
